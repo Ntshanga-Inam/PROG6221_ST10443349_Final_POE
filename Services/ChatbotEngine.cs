@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using CybersecurityChatbot_Part2.Models;
 
 namespace CybersecurityChatbot_Part2.Services
@@ -23,13 +24,17 @@ namespace CybersecurityChatbot_Part2.Services
         private string _currentTopic;
         private List<string> _lastUserTopics;
 
-        // NEW: Database Helper for Task Assistant and Activity Log
+        // Database Helper for Task Assistant and Activity Log
         private DatabaseHelper _dbHelper;
 
-        // NEW: Task Assistant state tracking
+        // Task Assistant state tracking
         private bool _awaitingTaskReminder;
         private string _pendingTaskTitle;
         private string _pendingTaskDescription;
+
+        // NEW: Enhanced NLP patterns for Task 3
+        private Dictionary<string, List<string>> _nlpPatterns;
+        private Dictionary<string, string> _nlpIntents;
 
         public ChatbotEngine()
         {
@@ -38,16 +43,15 @@ namespace CybersecurityChatbot_Part2.Services
             _random = new Random();
             _lastUserTopics = new List<string>();
 
-            // NEW: Initialize Database Helper
             _dbHelper = new DatabaseHelper();
 
-            // NEW: Initialize Task Assistant state
             _awaitingTaskReminder = false;
             _pendingTaskTitle = string.Empty;
             _pendingTaskDescription = string.Empty;
 
             InitializeKeywordResponses();
             InitializeRandomResponsePools();
+            InitializeNLPPatterns(); // NEW
         }
 
         private void InitializeKeywordResponses()
@@ -113,7 +117,244 @@ namespace CybersecurityChatbot_Part2.Services
             };
         }
 
-        // NEW: Main entry point with all features
+        // NEW: Initialize NLP Patterns for Task 3
+        private void InitializeNLPPatterns()
+        {
+            _nlpPatterns = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                // Task-related patterns
+                ["add_task"] = new List<string>
+                {
+                    @"add\s*(?:a\s*)?task",
+                    @"create\s*(?:a\s*)?task",
+                    @"new\s*task",
+                    @"i want to add",
+                    @"i need to add",
+                    @"remind me to",
+                    @"remind\s*me\s*to\s*",
+                    @"set\s*(?:a\s*)?reminder",
+                    @"remember to",
+                    @"don't forget to"
+                },
+                // View tasks patterns
+                ["view_tasks"] = new List<string>
+                {
+                    @"view\s*tasks",
+                    @"show\s*tasks",
+                    @"list\s*tasks",
+                    @"what tasks",
+                    @"my tasks",
+                    @"pending tasks",
+                    @"incomplete tasks",
+                    @"show me my tasks"
+                },
+                // Complete task patterns
+                ["complete_task"] = new List<string>
+                {
+                    @"complete\s*task",
+                    @"mark\s*(?:as\s*)?done",
+                    @"finish\s*task",
+                    @"task\s*complete",
+                    @"done\s*task"
+                },
+                // Delete task patterns
+                ["delete_task"] = new List<string>
+                {
+                    @"delete\s*task",
+                    @"remove\s*task",
+                    @"clear\s*task",
+                    @"task\s*delete"
+                },
+                // Quiz patterns
+                ["start_quiz"] = new List<string>
+                {
+                    @"start\s*(?:a\s*)?quiz",
+                    @"play\s*(?:a\s*)?quiz",
+                    @"take\s*(?:a\s*)?quiz",
+                    @"test\s*me",
+                    @"quiz\s*time",
+                    @"i want to play",
+                    @"cybersecurity\s*quiz",
+                    @"knowledge\s*test"
+                },
+                // Activity log patterns
+                ["show_log"] = new List<string>
+                {
+                    @"show\s*(?:activity\s*)?log",
+                    @"view\s*(?:activity\s*)?log",
+                    @"activity\s*log",
+                    @"what have you done",
+                    @"recent\s*actions",
+                    @"show me what you did",
+                    @"log\s*activities"
+                },
+                // Help patterns
+                ["help"] = new List<string>
+                {
+                    @"help",
+                    @"what can you do",
+                    @"capabilities",
+                    @"assist",
+                    @"how can you help"
+                }
+            };
+
+            _nlpIntents = new Dictionary<string, string>
+            {
+                ["add_task"] = "ADD_TASK",
+                ["view_tasks"] = "VIEW_TASKS",
+                ["complete_task"] = "COMPLETE_TASK",
+                ["delete_task"] = "DELETE_TASK",
+                ["start_quiz"] = "START_QUIZ",
+                ["show_log"] = "SHOW_LOG",
+                ["help"] = "HELP"
+            };
+        }
+
+        // NEW: Enhanced NLP detection for Task 3
+        private string DetectIntent(string userInput)
+        {
+            string lowerInput = userInput.ToLower();
+
+            foreach (var pattern in _nlpPatterns)
+            {
+                foreach (var regexPattern in pattern.Value)
+                {
+                    // Use Regex for more sophisticated matching
+                    if (Regex.IsMatch(lowerInput, regexPattern, RegexOptions.IgnoreCase))
+                    {
+                        return _nlpIntents[pattern.Key];
+                    }
+                }
+            }
+
+            // Check for simple keyword matches as fallback
+            if (lowerInput.Contains("task") || lowerInput.Contains("remind") || lowerInput.Contains("remember"))
+            {
+                if (lowerInput.Contains("add") || lowerInput.Contains("create") || lowerInput.Contains("new") ||
+                    lowerInput.Contains("remind") || lowerInput.Contains("remember"))
+                {
+                    return "ADD_TASK";
+                }
+                if (lowerInput.Contains("view") || lowerInput.Contains("show") || lowerInput.Contains("list"))
+                {
+                    return "VIEW_TASKS";
+                }
+                if (lowerInput.Contains("complete") || lowerInput.Contains("done") || lowerInput.Contains("finish"))
+                {
+                    return "COMPLETE_TASK";
+                }
+                if (lowerInput.Contains("delete") || lowerInput.Contains("remove") || lowerInput.Contains("clear"))
+                {
+                    return "DELETE_TASK";
+                }
+            }
+
+            if (lowerInput.Contains("quiz") || lowerInput.Contains("test") || lowerInput.Contains("play"))
+            {
+                return "START_QUIZ";
+            }
+
+            if (lowerInput.Contains("log") || lowerInput.Contains("done") || lowerInput.Contains("action") ||
+                lowerInput.Contains("recent") || lowerInput.Contains("history"))
+            {
+                return "SHOW_LOG";
+            }
+
+            return "UNKNOWN";
+        }
+
+        // NEW: Extract task description from NLP input
+        private string ExtractTaskDescription(string userInput)
+        {
+            // Remove common prefixes
+            string[] prefixes = {
+                "add task", "create task", "new task",
+                "remind me to", "set a reminder to", "remember to",
+                "i want to add", "i need to add", "don't forget to",
+                "add a task", "create a task"
+            };
+
+            string lowerInput = userInput.ToLower();
+            string result = userInput;
+
+            foreach (var prefix in prefixes)
+            {
+                if (lowerInput.StartsWith(prefix))
+                {
+                    result = userInput.Substring(prefix.Length).Trim();
+                    break;
+                }
+                else if (lowerInput.Contains(prefix))
+                {
+                    int index = lowerInput.IndexOf(prefix);
+                    result = userInput.Substring(index + prefix.Length).Trim();
+                    break;
+                }
+            }
+
+            // If the result is empty or the same as input, try to extract meaningful text
+            if (string.IsNullOrWhiteSpace(result) || result == userInput)
+            {
+                // Try to extract after common trigger words
+                string[] triggers = { "to", "for", "about" };
+                foreach (var trigger in triggers)
+                {
+                    if (lowerInput.Contains(" " + trigger + " "))
+                    {
+                        int index = lowerInput.IndexOf(" " + trigger + " ");
+                        result = userInput.Substring(index + trigger.Length + 2).Trim();
+                        break;
+                    }
+                }
+            }
+
+            return string.IsNullOrWhiteSpace(result) ? userInput : result;
+        }
+
+        // NEW: Extract reminder date from NLP input
+        private DateTime? ExtractReminderDate(string userInput)
+        {
+            string lowerInput = userInput.ToLower();
+
+            // Check for "tomorrow"
+            if (lowerInput.Contains("tomorrow") || lowerInput.Contains("tmr"))
+                return DateTime.Today.AddDays(1);
+
+            // Check for "next week"
+            if (lowerInput.Contains("next week"))
+                return DateTime.Today.AddDays(7);
+
+            // Check for "next month"
+            if (lowerInput.Contains("next month"))
+                return DateTime.Today.AddMonths(1);
+
+            // Check for "in X days/weeks"
+            var match = Regex.Match(lowerInput, @"in\s*(\d+)\s*(day|week|month)s?");
+            if (match.Success)
+            {
+                int number = int.Parse(match.Groups[1].Value);
+                string unit = match.Groups[2].Value.ToLower();
+                if (unit == "day")
+                    return DateTime.Today.AddDays(number);
+                if (unit == "week")
+                    return DateTime.Today.AddDays(number * 7);
+                if (unit == "month")
+                    return DateTime.Today.AddMonths(number);
+            }
+
+            // Check for "on [date]"
+            match = Regex.Match(lowerInput, @"on\s*(\d{4}-\d{2}-\d{2})");
+            if (match.Success)
+            {
+                if (DateTime.TryParse(match.Groups[1].Value, out DateTime date))
+                    return date;
+            }
+
+            return null;
+        }
+
+        // NEW: Main entry point with enhanced NLP
         public string ProcessInputWithFeatures(string userInput)
         {
             // Store for conversation flow
@@ -128,7 +369,37 @@ namespace CybersecurityChatbot_Part2.Services
                 return $"Nice to meet you, {_memory.GetUserName()}! I'm your Cybersecurity Awareness Bot. What would you like to learn about today? You can ask about passwords, phishing, scams, privacy, tasks, or type 'quiz' to play a game!";
             }
 
-            // NEW: Check for Quiz commands (Task 2)
+            // Check if we're awaiting a reminder response
+            if (_awaitingTaskReminder)
+            {
+                return ProcessReminderResponse(userInput);
+            }
+
+            // NEW: Enhanced NLP intent detection
+            string intent = DetectIntent(userInput);
+
+            switch (intent)
+            {
+                case "ADD_TASK":
+                    return HandleNLPAddTask(userInput);
+                case "VIEW_TASKS":
+                    return HandleViewTasks();
+                case "COMPLETE_TASK":
+                    return HandleCompleteTask(userInput);
+                case "DELETE_TASK":
+                    return HandleDeleteTask(userInput);
+                case "START_QUIZ":
+                    _dbHelper.LogActivity("Quiz Started", "User requested quiz via NLP");
+                    return "QUIZ_START";
+                case "SHOW_LOG":
+                    return HandleViewActivityLog();
+                case "HELP":
+                    return GetHelpResponse();
+                default:
+                    break;
+            }
+
+            // Check for Quiz commands (Task 2)
             if (userInput.ToLower().Contains("quiz") || userInput.ToLower().Contains("play game") ||
                 userInput.ToLower().Contains("test me") || userInput.ToLower().Contains("cybersecurity game") ||
                 userInput.ToLower().Contains("start quiz"))
@@ -137,22 +408,26 @@ namespace CybersecurityChatbot_Part2.Services
                 return "QUIZ_START";
             }
 
-            // NEW: Check for Activity Log commands (Task 4 - Preview)
+            // Check for Activity Log commands (Task 4)
             if (userInput.ToLower().Contains("activity log") || userInput.ToLower().Contains("show log") ||
-                userInput.ToLower().Contains("view log") || userInput.ToLower().Contains("recent activities"))
+                userInput.ToLower().Contains("view log") || userInput.ToLower().Contains("recent activities") ||
+                userInput.ToLower().Contains("what have you done"))
             {
                 return HandleViewActivityLog();
             }
 
-            // NEW: Check for Task Assistant commands first (Task 1)
+            // Check for Task Assistant commands (Task 1)
             var taskResponse = ProcessTaskCommand(userInput);
             if (taskResponse != null)
                 return taskResponse;
 
-            // NEW: NLP Simulation
+            // NLP Simulation (Task 3) - Advanced Natural Language Processing
             var nlpResponse = ProcessNaturalLanguage(userInput);
             if (nlpResponse != null)
+            {
+                _dbHelper.LogActivity("NLP Interaction", $"Processed: {userInput}");
                 return nlpResponse;
+            }
 
             // Handle follow-up requests
             if (IsFollowUpRequest(userInput))
@@ -186,8 +461,61 @@ namespace CybersecurityChatbot_Part2.Services
                 return GetRandomTip();
             }
 
-            // Default response
-            return "I'm not sure I understand. Can you try rephrasing? You can ask about passwords, phishing, scams, privacy, tasks, or type 'quiz' to play a game!";
+            // Default response - limited as much as possible (Task 3 requirement)
+            return "I understand you're asking about cybersecurity. Could you be more specific? Try asking about passwords, phishing, scams, privacy, or say 'help' for options. You can also add tasks or start a quiz!";
+        }
+
+        // NEW: Handle NLP-based task addition
+        private string HandleNLPAddTask(string userInput)
+        {
+            string taskDescription = ExtractTaskDescription(userInput);
+            DateTime? reminderDate = ExtractReminderDate(userInput);
+
+            if (string.IsNullOrWhiteSpace(taskDescription))
+            {
+                return "What task would you like to add? Please describe the cybersecurity task.";
+            }
+
+            // Clean up the task description
+            taskDescription = taskDescription.Trim();
+            if (taskDescription.Length > 100)
+                taskDescription = taskDescription.Substring(0, 97) + "...";
+
+            _pendingTaskTitle = taskDescription;
+            _pendingTaskDescription = taskDescription;
+
+            _dbHelper.LogActivity("Task Creation", $"User started adding task via NLP: {_pendingTaskTitle}");
+
+            return $"📝 Task added: \"{_pendingTaskTitle}\"\n\nWould you like to set a reminder for this task? (reply with 'yes' to set date, 'no' for no reminder)";
+        }
+
+        // NEW: Get help response
+        private string GetHelpResponse()
+        {
+            return @"🤖 **I can help you with:**
+
+**Cybersecurity Topics:**
+• 🔐 Password safety tips
+• 🎣 Recognizing phishing emails  
+• ⚠️ Avoiding online scams
+• 🛡️ Privacy protection
+
+**Task Management:**
+• 📝 Add a task: 'Add task to enable 2FA'
+• 👀 View tasks: 'Show my tasks'
+• ✅ Complete tasks: 'Complete task 1'
+• 🗑️ Delete tasks: 'Delete task 1'
+
+**Fun Features:**
+• 🎮 Play cybersecurity quiz: 'Start quiz'
+• 📜 View activity log: 'Show activity log'
+• 💡 Get random tips: 'Another tip'
+
+**Natural Language:**
+• Try phrasing things naturally like 'Remind me to update my password tomorrow'
+• 'What have you done for me?' to see activity log
+
+What would you like to do?";
         }
 
         // Keep original ProcessInput for backward compatibility
@@ -196,54 +524,80 @@ namespace CybersecurityChatbot_Part2.Services
             return ProcessInputWithFeatures(userInput);
         }
 
-        // NEW: NLP Simulation method
+        // NEW: Enhanced NLP Simulation method (Task 3)
         private string ProcessNaturalLanguage(string userInput)
         {
             string lowerInput = userInput.ToLower();
 
-            // Advanced NLP pattern matching
-            if (lowerInput.Contains("how to") || lowerInput.Contains("way to"))
+            // Advanced NLP pattern matching with multiple variations
+
+            // 1. "How to..." patterns
+            if (lowerInput.Contains("how to") || lowerInput.Contains("way to") || lowerInput.Contains("how do i"))
             {
-                if (lowerInput.Contains("protect") || lowerInput.Contains("secure"))
-                    return "🔒 Great question! Start with strong passwords and enable 2FA on all accounts. Would you like specific steps? Just ask about 'password' or '2fa'!";
-                if (lowerInput.Contains("spot") || lowerInput.Contains("identify") && lowerInput.Contains("phish"))
-                    return "🎣 To spot phishing: check sender email addresses, hover over links, look for urgency, and never share personal info via email.";
+                if (lowerInput.Contains("protect") || lowerInput.Contains("secure") || lowerInput.Contains("safe"))
+                    return "🔒 Great question! To protect yourself online:\n• Use strong, unique passwords\n• Enable 2FA on all accounts\n• Be cautious of suspicious emails\n• Keep software updated\n\nWould you like more details on any of these?";
+                if (lowerInput.Contains("spot") || lowerInput.Contains("identify") && (lowerInput.Contains("phish") || lowerInput.Contains("scam")))
+                    return "🎣 To spot phishing/scams:\n• Check sender email addresses carefully\n• Hover over links before clicking\n• Look for urgency or threats\n• Never share personal info via email\n\nTrust your instincts - if it feels wrong, it probably is!";
                 if (lowerInput.Contains("create") && lowerInput.Contains("password"))
-                    return "🔐 To create a strong password: use at least 12 characters, mix uppercase/lowercase, add numbers and symbols, and avoid common words!";
+                    return "🔐 To create a strong password:\n• Use at least 12 characters\n• Mix uppercase and lowercase\n• Add numbers and symbols\n• Avoid common words or personal info\n• Consider a passphrase like 'PurpleDinosaur$EatsPizza!7'";
+                if (lowerInput.Contains("2fa") || lowerInput.Contains("two factor"))
+                    return "🔐 Setting up 2FA:\n1. Go to your account security settings\n2. Select 'Two-Factor Authentication'\n3. Choose method (SMS, Authenticator App, or Hardware Key)\n4. Follow the setup instructions\n5. Save backup codes in a safe place!";
             }
 
-            if (lowerInput.Contains("what if") || lowerInput.Contains("what happens"))
+            // 2. "What if..." patterns
+            if (lowerInput.Contains("what if") || lowerInput.Contains("what happens") || lowerInput.Contains("what should i"))
             {
-                if (lowerInput.Contains("click") && lowerInput.Contains("link"))
-                    return "⚠️ If you accidentally click a suspicious link: disconnect from internet immediately, run antivirus scan, and change passwords for important accounts.";
-                if (lowerInput.Contains("scam"))
-                    return "📞 If you suspect a scam: don't engage, block the number/sender, report to authorities, and warn others.";
+                if (lowerInput.Contains("click") && (lowerInput.Contains("link") || lowerInput.Contains("email")))
+                    return "⚠️ If you clicked a suspicious link:\n1. Disconnect from the internet immediately\n2. Run a full antivirus scan\n3. Change passwords for important accounts\n4. Monitor for unusual activity\n5. Consider reporting to the relevant authorities\n\nStay calm - acting quickly helps!";
+                if (lowerInput.Contains("scam") || lowerInput.Contains("fraud"))
+                    return "📞 If you suspect a scam:\n1. Don't engage with the scammer\n2. Block the number/email address\n3. Report to the appropriate authorities\n4. Warn friends and family\n5. Monitor your accounts for unusual activity\n\nRemember - legitimate organizations won't ask for sensitive info!";
                 if (lowerInput.Contains("phish") || lowerInput.Contains("phishing"))
-                    return "🎣 If you suspect phishing: don't click anything, report the email to your IT department or the company being impersonated, and delete it.";
+                    return "🎣 If you suspect phishing:\n1. Don't click any links or attachments\n2. Don't reply to the email\n3. Report it to your IT department or the company being impersonated\n4. Delete the email\n5. If you entered info, change your passwords immediately!";
+                if (lowerInput.Contains("password") && (lowerInput.Contains("stolen") || lowerInput.Contains("hack") || lowerInput.Contains("compromised")))
+                    return "🔑 If your password is compromised:\n1. Change the password immediately on that account\n2. Change it on any other accounts using the same password\n3. Enable 2FA if available\n4. Check for unauthorized activity\n5. Consider using a password manager for better security!";
             }
 
-            if (lowerInput.Contains("why") && (lowerInput.Contains("important") || lowerInput.Contains("need")))
+            // 3. "Why..." patterns
+            if (lowerInput.Contains("why") && (lowerInput.Contains("important") || lowerInput.Contains("need") || lowerInput.Contains("should")))
             {
                 if (lowerInput.Contains("2fa") || lowerInput.Contains("two factor"))
-                    return "🔐 2FA is crucial because passwords alone can be stolen - 2FA ensures even if someone has your password, they can't access your account without your phone!";
-                if (lowerInput.Contains("update") || lowerInput.Contains("updates"))
-                    return "🔄 Updates fix security vulnerabilities. Hackers exploit outdated software - updating closes those gaps!";
+                    return "🔐 2FA is crucial because passwords alone can be stolen or guessed. With 2FA, even if someone has your password, they can't access your account without your second factor (phone, authenticator, or hardware key). It adds a vital extra layer of protection!";
+                if (lowerInput.Contains("update") || lowerInput.Contains("updates") || lowerInput.Contains("software"))
+                    return "🔄 Updates are critical because they fix security vulnerabilities that hackers exploit. Every update patches known weaknesses, protecting you from attacks. Set automatic updates where possible and never delay important security updates!";
                 if (lowerInput.Contains("password") || lowerInput.Contains("passwords"))
-                    return "🔑 Strong passwords matter because weak passwords can be cracked in seconds. Each character you add makes it exponentially harder to break!";
+                    return "🔑 Strong passwords matter because weak passwords can be cracked in seconds. Each additional character makes it exponentially harder to break. Think of it like a lock - a stronger lock (complex password) is harder to pick than a simple one!";
+                if (lowerInput.Contains("privacy") || lowerInput.Contains("private"))
+                    return "🛡️ Privacy protection matters because your personal information is valuable. Scammers can use seemingly harmless details to impersonate you, access your accounts, or steal your identity. Always think before sharing personal information online!";
             }
 
-            if (lowerInput.Contains("can you") || lowerInput.Contains("could you"))
+            // 4. "Can you..." patterns
+            if (lowerInput.Contains("can you") || lowerInput.Contains("could you") || lowerInput.Contains("will you"))
             {
-                if (lowerInput.Contains("help") || lowerInput.Contains("assist"))
-                    return "🤖 Of course! I can help with:\n• Password safety tips\n• Recognizing phishing emails\n• Avoiding scams\n• Privacy protection\n• Task management (add/view tasks)\n• Cybersecurity quiz\n\nJust ask about any of these topics!";
-                if (lowerInput.Contains("explain") || lowerInput.Contains("tell"))
-                    return "📚 I'd be happy to explain! What specific cybersecurity topic are you interested in? Try asking about passwords, phishing, or scams.";
+                if (lowerInput.Contains("help") || lowerInput.Contains("assist") || lowerInput.Contains("support"))
+                    return "🤖 Absolutely! I can help with:\n• Password safety tips\n• Recognizing phishing emails\n• Avoiding scams\n• Privacy protection\n• Task management (add/view tasks)\n• Cybersecurity quiz\n• Natural language questions\n\nJust ask about any topic or try phrasing your question naturally!";
+                if (lowerInput.Contains("explain") || lowerInput.Contains("tell") || lowerInput.Contains("teach"))
+                    return "📚 I'd be happy to explain! What specific cybersecurity topic are you interested in? You can ask about:\n• How to create strong passwords\n• How to spot phishing emails\n• What ransomware is\n• Why 2FA is important\n• How to protect your privacy\n\nJust ask and I'll provide a detailed explanation!";
+                if (lowerInput.Contains("remind") || lowerInput.Contains("remember"))
+                    return "🔔 I can set reminders for you! Just tell me what you want to remember and when. For example:\n• 'Remind me to update my password tomorrow'\n• 'Remember to enable 2FA in 3 days'\n• 'Remind me to review privacy settings next week'";
+                if (lowerInput.Contains("task") || lowerInput.Contains("add"))
+                    return "📝 I can help you manage cybersecurity tasks! Try:\n• 'Add task to enable 2FA'\n• 'Create task to review privacy settings'\n• 'Remind me to update passwords tomorrow'\n• 'Show my pending tasks'\n\nTasks are stored in the database and you can track your progress!";
+            }
+
+            // 5. "I want to..." or "I need to..." patterns
+            if (lowerInput.Contains("i want to") || lowerInput.Contains("i need to") || lowerInput.Contains("i'd like to"))
+            {
+                if (lowerInput.Contains("learn") || lowerInput.Contains("know") || lowerInput.Contains("understand"))
+                    return "📖 That's great! What specific topic do you want to learn about? I can teach you about:\n• Password security\n• Phishing detection\n• Scam awareness\n• Privacy protection\n• Safe browsing habits\n\nJust type your topic and I'll share useful information!";
+                if (lowerInput.Contains("secure") || lowerInput.Contains("protect"))
+                    return "🛡️ You're doing the right thing! To stay secure:\n1. Use strong passwords\n2. Enable 2FA\n3. Be suspicious of unexpected emails\n4. Keep software updated\n5. Use antivirus software\n6. Use a VPN on public Wi-Fi\n\nNeed more details on any of these?";
+                if (lowerInput.Contains("task") || lowerInput.Contains("todo") || lowerInput.Contains("to do"))
+                    return "📝 I can help you manage your cybersecurity tasks! Try saying:\n• 'Add task to enable two-factor authentication'\n• 'Create task to review privacy settings'\n• 'Show my pending tasks'\n• 'Complete task 1'\n\nLet me know what you want to do!";
             }
 
             return null; // Return null if no NLP pattern matched
         }
 
-        // NEW: Task Processing methods (Task 1)
+        // Task Processing methods remain the same but with enhanced NLP integration
         private string ProcessTaskCommand(string userInput)
         {
             string lowerInput = userInput.ToLower();
@@ -254,39 +608,46 @@ namespace CybersecurityChatbot_Part2.Services
                 return ProcessReminderResponse(userInput);
             }
 
-            // Add task command
-            if (lowerInput.StartsWith("add task") || lowerInput.Contains("create task"))
+            // Add task command with multiple variations
+            if (lowerInput.StartsWith("add task") || lowerInput.Contains("create task") ||
+                lowerInput.Contains("new task") || lowerInput.Contains("add a task") ||
+                lowerInput.Contains("create a task"))
             {
                 return HandleAddTask(userInput);
             }
 
             // View tasks command
-            if (lowerInput.Contains("view tasks") || lowerInput.Contains("show tasks") || lowerInput.Contains("list tasks"))
+            if (lowerInput.Contains("view tasks") || lowerInput.Contains("show tasks") ||
+                lowerInput.Contains("list tasks") || lowerInput.Contains("my tasks"))
             {
                 return HandleViewTasks();
             }
 
             // View pending tasks
-            if (lowerInput.Contains("pending tasks") || lowerInput.Contains("incomplete tasks") || lowerInput.Contains("not done"))
+            if (lowerInput.Contains("pending tasks") || lowerInput.Contains("incomplete tasks") ||
+                lowerInput.Contains("not done") || lowerInput.Contains("incomplete"))
             {
                 return HandleViewPendingTasks();
             }
 
             // View completed tasks
-            if (lowerInput.Contains("completed tasks") || lowerInput.Contains("done tasks") || lowerInput.Contains("finished tasks"))
+            if (lowerInput.Contains("completed tasks") || lowerInput.Contains("done tasks") ||
+                lowerInput.Contains("finished tasks"))
             {
                 return HandleViewCompletedTasks();
             }
 
             // Complete task command
             if (lowerInput.Contains("complete task") || lowerInput.Contains("mark as done") ||
-                lowerInput.Contains("finish task") || lowerInput.Contains("done task"))
+                lowerInput.Contains("finish task") || lowerInput.Contains("done task") ||
+                lowerInput.Contains("mark done"))
             {
                 return HandleCompleteTask(userInput);
             }
 
             // Delete task command
-            if (lowerInput.Contains("delete task") || lowerInput.Contains("remove task") || lowerInput.Contains("clear task"))
+            if (lowerInput.Contains("delete task") || lowerInput.Contains("remove task") ||
+                lowerInput.Contains("clear task"))
             {
                 return HandleDeleteTask(userInput);
             }
@@ -296,12 +657,18 @@ namespace CybersecurityChatbot_Part2.Services
 
         private string HandleAddTask(string userInput)
         {
-            // Extract task description (remove "add task" prefix)
+            // Extract task description
             string taskText = userInput;
-            if (taskText.ToLower().StartsWith("add task"))
-                taskText = taskText.Substring(8).Trim();
-            else if (taskText.ToLower().StartsWith("create task"))
-                taskText = taskText.Substring(11).Trim();
+            string[] prefixes = { "add task", "create task", "new task", "add a task", "create a task" };
+
+            foreach (var prefix in prefixes)
+            {
+                if (taskText.ToLower().StartsWith(prefix))
+                {
+                    taskText = taskText.Substring(prefix.Length).Trim();
+                    break;
+                }
+            }
 
             if (string.IsNullOrWhiteSpace(taskText))
                 return "What task would you like to add? Please describe the cybersecurity task.\n\nExample: 'Add task - Review privacy settings on social media'";
@@ -319,11 +686,11 @@ namespace CybersecurityChatbot_Part2.Services
         {
             string lowerInput = userInput.ToLower();
 
-            if (lowerInput.Contains("yes") || lowerInput.Contains("set reminder") || lowerInput.Contains("remind"))
+            if (lowerInput.Contains("yes") || lowerInput.Contains("set reminder") || lowerInput.Contains("remind") || lowerInput.Contains("sure"))
             {
                 return "📅 When would you like to be reminded?\n\nExamples:\n- 'tomorrow'\n- 'in 3 days'\n- 'next week'\n- 'on 2026-07-01'\n\nPlease specify a date or timeframe.";
             }
-            else if (lowerInput.Contains("no") || lowerInput.Contains("skip") || lowerInput.Contains("none"))
+            else if (lowerInput.Contains("no") || lowerInput.Contains("skip") || lowerInput.Contains("none") || lowerInput.Contains("cancel"))
             {
                 return SaveTaskToDatabase(null);
             }
@@ -353,27 +720,18 @@ namespace CybersecurityChatbot_Part2.Services
             if (input.Contains("next month"))
                 return DateTime.Today.AddMonths(1);
 
-            // Parse "in X days/weeks"
-            if (input.Contains("in "))
+            // Parse "in X days/weeks/months"
+            var match = System.Text.RegularExpressions.Regex.Match(input, @"in\s*(\d+)\s*(day|week|month)s?");
+            if (match.Success)
             {
-                var words = input.Split(' ');
-                for (int i = 0; i < words.Length; i++)
-                {
-                    if (int.TryParse(words[i], out int number))
-                    {
-                        // Check if next word is days, day, weeks, week, months, month
-                        if (i + 1 < words.Length)
-                        {
-                            string nextWord = words[i + 1].ToLower();
-                            if (nextWord.StartsWith("day"))
-                                return DateTime.Today.AddDays(number);
-                            if (nextWord.StartsWith("week"))
-                                return DateTime.Today.AddDays(number * 7);
-                            if (nextWord.StartsWith("month"))
-                                return DateTime.Today.AddMonths(number);
-                        }
-                    }
-                }
+                int number = int.Parse(match.Groups[1].Value);
+                string unit = match.Groups[2].Value.ToLower();
+                if (unit == "day")
+                    return DateTime.Today.AddDays(number);
+                if (unit == "week")
+                    return DateTime.Today.AddDays(number * 7);
+                if (unit == "month")
+                    return DateTime.Today.AddMonths(number);
             }
 
             // Try parsing specific date
@@ -398,10 +756,15 @@ namespace CybersecurityChatbot_Part2.Services
 
             if (success)
             {
-                _dbHelper.LogActivity("Task Added", $"Task: {_pendingTaskTitle}");
+                _dbHelper.LogActivity("Task Added", $"Task: {_pendingTaskTitle} (Reminder: {(reminderDate.HasValue ? reminderDate.Value.ToString("MMM dd, yyyy") : "None")})");
                 string reminderText = reminderDate.HasValue
                     ? $" with reminder on {reminderDate.Value:MMM dd, yyyy}"
                     : "";
+
+                if (reminderDate.HasValue)
+                {
+                    _dbHelper.LogActivity("Reminder Set", $"For task: {_pendingTaskTitle} on {reminderDate.Value:MMM dd, yyyy}");
+                }
 
                 return $"✅ Task saved successfully{reminderText}!\n\nYou can view all tasks by typing 'view tasks'.";
             }
@@ -519,7 +882,6 @@ namespace CybersecurityChatbot_Part2.Services
             if (pendingTasks.Count == 0)
                 return "🌟 No pending tasks to complete! You're all caught up. Add a new task with 'add task' to stay organized!";
 
-            // Try to extract task number
             int taskNumber = -1;
             var words = userInput.Split(' ');
             foreach (var word in words)
@@ -603,7 +965,7 @@ namespace CybersecurityChatbot_Part2.Services
             }
         }
 
-        // NEW: Activity Log View (Task 4 - Preview)
+        // NEW: Enhanced Activity Log View with pagination (Task 4)
         private string HandleViewActivityLog()
         {
             var activities = _dbHelper.GetRecentActivities(10);
@@ -616,27 +978,58 @@ namespace CybersecurityChatbot_Part2.Services
 
             foreach (var activity in activities)
             {
-                string icon = activity.ActionType switch
-                {
-                    "Task Added" => "📝",
-                    "Task Completed" => "✅",
-                    "Task Deleted" => "🗑️",
-                    "Task Creation" => "✏️",
-                    "Keyword Query" => "🔍",
-                    "Quiz Started" => "🎮",
-                    "Quiz Completed" => "🏆",
-                    "User Registration" => "👤",
-                    "NLP Query" => "🤖",
-                    _ => "•"
-                };
-
+                string icon = activity.Icon;
                 response += $"{icon} **{activity.ActionType}**\n";
                 response += $"   {activity.Description}\n";
                 response += $"   📅 {activity.Timestamp:MMM dd, yyyy HH:mm}\n\n";
             }
 
             response += "═══════════════════════════════════\n";
+
+            int totalCount = _dbHelper.GetTotalActivitiesCount();
+            if (totalCount > 10)
+            {
+                response += $"💡 Showing 10 of {totalCount} activities. Type 'show more log' to see more!\n";
+            }
+
             response += "💡 Type 'activity log' again to refresh";
+
+            return response;
+        }
+
+        // NEW: Show more activities (Task 4)
+        public string ShowMoreActivities(int page = 2)
+        {
+            int pageSize = 10;
+            var activities = _dbHelper.GetActivitiesPaginated(page, pageSize);
+
+            if (activities.Count == 0)
+                return "📋 No more activities to show.";
+
+            string response = $"📜 **ACTIVITY LOG** (Page {page} - {pageSize} entries)\n\n";
+            response += "═══════════════════════════════════\n\n";
+
+            foreach (var activity in activities)
+            {
+                string icon = activity.Icon;
+                response += $"{icon} **{activity.ActionType}**\n";
+                response += $"   {activity.Description}\n";
+                response += $"   📅 {activity.Timestamp:MMM dd, yyyy HH:mm}\n\n";
+            }
+
+            response += "═══════════════════════════════════\n";
+
+            int totalCount = _dbHelper.GetTotalActivitiesCount();
+            int totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
+
+            if (page < totalPages)
+            {
+                response += $"💡 Page {page} of {totalPages}. Type 'show more log' to see the next page!";
+            }
+            else
+            {
+                response += "📌 You've reached the end of the activity log!";
+            }
 
             return response;
         }
@@ -726,6 +1119,12 @@ namespace CybersecurityChatbot_Part2.Services
         private string GetSimpleTip()
         {
             return "🔒 Simple rule: If you didn't expect it, don't click it. If you didn't request it, don't trust it.";
+        }
+
+        // NEW: Show more activities (Task 4) - public method for MainWindow
+        public string ShowMoreActivities()
+        {
+            return ShowMoreActivities(2);
         }
     }
 }
