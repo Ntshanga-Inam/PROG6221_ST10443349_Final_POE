@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Data;
 using MySql.Data.MySqlClient;
-using CybersecurityChatbot_Part2.Models;  // ADD THIS USING
+using CybersecurityChatbot_Part2.Models;
 
 namespace CybersecurityChatbot_Part2.Services
 {
@@ -48,7 +48,6 @@ namespace CybersecurityChatbot_Part2.Services
             }
         }
 
-        // CHANGE: Use Models.TaskItem instead of Services.TaskItem
         public List<TaskItem> GetAllTasks()
         {
             var tasks = new List<TaskItem>();
@@ -140,7 +139,7 @@ namespace CybersecurityChatbot_Part2.Services
             }
         }
 
-        // Activity Log Methods
+        // Activity Log Methods - Enhanced for Task 4
 
         public bool LogActivity(string actionType, string description)
         {
@@ -218,6 +217,78 @@ namespace CybersecurityChatbot_Part2.Services
             {
                 System.Diagnostics.Debug.WriteLine($"Database Error: {ex.Message}");
                 return 0;
+            }
+        }
+
+        // NEW: Get activities with pagination for "Show More" feature
+        public List<ActivityLogEntry> GetActivitiesPaginated(int page, int pageSize = 10)
+        {
+            var activities = new List<ActivityLogEntry>();
+            try
+            {
+                using (var conn = GetConnection())
+                {
+                    conn.Open();
+                    int offset = (page - 1) * pageSize;
+                    string query = "SELECT * FROM activity_log ORDER BY timestamp DESC LIMIT @offset, @pageSize";
+                    using (var cmd = new MySqlCommand(query, conn))
+                    {
+                        cmd.Parameters.AddWithValue("@offset", offset);
+                        cmd.Parameters.AddWithValue("@pageSize", pageSize);
+                        using (var reader = cmd.ExecuteReader())
+                        {
+                            while (reader.Read())
+                            {
+                                activities.Add(new ActivityLogEntry
+                                {
+                                    Id = reader.GetInt32("id"),
+                                    ActionType = reader.GetString("action_type"),
+                                    Description = reader.GetString("description"),
+                                    Timestamp = reader.GetDateTime("timestamp")
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Database Error: {ex.Message}");
+            }
+            return activities;
+        }
+
+        public class ActivityLogEntry
+        {
+            public int Id { get; set; }
+            public string ActionType { get; set; } = string.Empty;
+            public string Description { get; set; } = string.Empty;
+            public DateTime Timestamp { get; set; }
+
+            public string DisplayTime => Timestamp.ToString("HH:mm:ss");
+            public string DisplayDate => Timestamp.ToString("MMM dd, yyyy");
+            public string DisplayDateTime => Timestamp.ToString("MMM dd, yyyy HH:mm");
+            public string Icon
+            {
+                get
+                {
+                    return ActionType switch
+                    {
+                        "Task Added" => "📝",
+                        "Task Completed" => "✅",
+                        "Task Deleted" => "🗑️",
+                        "Task Creation" => "✏️",
+                        "Reminder Set" => "🔔",
+                        "Keyword Query" => "🔍",
+                        "Quiz Started" => "🎮",
+                        "Quiz Completed" => "🏆",
+                        "User Registration" => "👤",
+                        "NLP Interaction" => "🤖",
+                        "NLP Query" => "🧠",
+                        "NLP Intent" => "🎯",
+                        _ => "•"
+                    };
+                }
             }
         }
     }
