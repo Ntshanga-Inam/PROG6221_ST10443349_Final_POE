@@ -135,6 +135,20 @@ namespace CybersecurityChatbot_Part2_WPF
             }
         }
 
+        // NEW: Handle "Show More" for activity log
+        private void HandleShowMoreActivities()
+        {
+            if (_chatbot != null)
+            {
+                string response = _chatbot.ShowMoreActivities();
+                AddBotMessage(response);
+            }
+            else
+            {
+                AddBotMessage("I'm having trouble connecting. Please try again later.");
+            }
+        }
+
         private void ProcessUserInput()
         {
             string userInput = InputTextBox.Text.Trim();
@@ -158,6 +172,16 @@ namespace CybersecurityChatbot_Part2_WPF
                 AddBotMessage(response);
 
                 // Auto-scroll to bottom
+                ScrollToBottom();
+                return;
+            }
+
+            // Check for "show more log" command (Task 4)
+            string lowerInput = userInput.ToLower();
+            if (lowerInput.Contains("show more log") || lowerInput.Contains("more log") ||
+                lowerInput.Contains("show more") && lowerInput.Contains("log"))
+            {
+                HandleShowMoreActivities();
                 ScrollToBottom();
                 return;
             }
