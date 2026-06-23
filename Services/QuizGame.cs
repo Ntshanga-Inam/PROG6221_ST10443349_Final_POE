@@ -10,10 +10,11 @@ namespace CybersecurityChatbot_Part2.Services
         private int _currentQuestionIndex;
         private int _score;
         private bool _gameActive;
+        private Random _random;
 
-        
         public QuizGame()
         {
+            _random = new Random();
             InitializeQuestions();
             ResetGame();
         }
@@ -154,7 +155,7 @@ namespace CybersecurityChatbot_Part2.Services
                     CorrectAnswerIndex = 0,
                     Explanation = "Ransomware is malware that encrypts your files and demands payment (ransom) for decryption. Never pay - maintain regular backups instead!"
                 },
-                // Question 10 - Bonus question 
+                // Question 10
                 new QuizQuestion
                 {
                     Id = 10,
@@ -188,9 +189,6 @@ namespace CybersecurityChatbot_Part2.Services
                 }
             };
         }
-
-        public int GetCurrentScore() => _score;
-        public int GetRemainingQuestions() => _questions.Count - _currentQuestionIndex;
 
         public void ResetGame()
         {
@@ -264,6 +262,8 @@ namespace CybersecurityChatbot_Part2.Services
 
         public int GetTotalQuestions() => _questions.Count;
         public bool IsGameActive => _gameActive;
+        public int GetCurrentScore() => _score;
+        public int GetRemainingQuestions() => _questions.Count - _currentQuestionIndex;
     }
 
     public class QuizQuestion
