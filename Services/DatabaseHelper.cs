@@ -12,8 +12,8 @@ namespace CybersecurityChatbot_Part2.Services
 
         public DatabaseHelper()
         {
-            // Update with your MySQL credentials
-            connectionString = "Server=localhost;Database=CybersecurityBot;Uid=root;Pwd=;";
+            
+            connectionString = "Server=localhost;Database=CybersecurityBot;Uid=root;Pwd=Nizothegreat16E+;";
         }
 
         private MySqlConnection GetConnection()
